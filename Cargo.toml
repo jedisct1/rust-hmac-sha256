@@ -1,0 +1,18 @@
+[package]
+name = "hmac-sha256"
+version = "0.1.0"
+authors = ["Frank Denis <github@pureftpd.org>"]
+edition = "2018"
+description = "A small, self-contained SHA256 and HMAC-SHA256 implementation"
+keywords = ["crypto", "hash", "hmac", "sha2", "sha256"]
+repository = "https://github.com/jedisct1/rust-hmac-sha256"
+homepage = "https://github.com/jedisct1/rust-hmac-sha256"
+categories = ["algorithms", "cryptography"]
+license = "ISC"
+
+[dependencies]
+
+[profile.release]
+lto = true
+panic = "abort"
+opt-level = 3
