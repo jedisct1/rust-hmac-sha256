@@ -4,10 +4,11 @@
 #![no_std]
 #![allow(
     non_snake_case,
-    clippy::many_single_char_names,
-    clippy::unreadable_literal,
     clippy::cast_lossless,
-    clippy::identity_op
+    clippy::eq_op,
+    clippy::identity_op,
+    clippy::many_single_char_names,
+    clippy::unreadable_literal
 )]
 
 #[inline(always)]
@@ -80,9 +81,22 @@ impl W {
 
     #[inline]
     fn expand(&mut self) {
-        for i in 0..16 {
-            self.M(i, (i + 14) & 15, (i + 9) & 15, (i + 1) & 15);
-        }
+        self.M(0, (0 + 14) & 15, (0 + 9) & 15, (0 + 1) & 15);
+        self.M(1, (1 + 14) & 15, (1 + 9) & 15, (1 + 1) & 15);
+        self.M(2, (2 + 14) & 15, (2 + 9) & 15, (2 + 1) & 15);
+        self.M(3, (3 + 14) & 15, (3 + 9) & 15, (3 + 1) & 15);
+        self.M(4, (4 + 14) & 15, (4 + 9) & 15, (4 + 1) & 15);
+        self.M(5, (5 + 14) & 15, (5 + 9) & 15, (5 + 1) & 15);
+        self.M(6, (6 + 14) & 15, (6 + 9) & 15, (6 + 1) & 15);
+        self.M(7, (7 + 14) & 15, (7 + 9) & 15, (7 + 1) & 15);
+        self.M(8, (8 + 14) & 15, (8 + 9) & 15, (8 + 1) & 15);
+        self.M(9, (9 + 14) & 15, (9 + 9) & 15, (9 + 1) & 15);
+        self.M(10, (10 + 14) & 15, (10 + 9) & 15, (10 + 1) & 15);
+        self.M(11, (11 + 14) & 15, (11 + 9) & 15, (11 + 1) & 15);
+        self.M(12, (12 + 14) & 15, (12 + 9) & 15, (12 + 1) & 15);
+        self.M(13, (13 + 14) & 15, (13 + 9) & 15, (13 + 1) & 15);
+        self.M(14, (14 + 14) & 15, (14 + 9) & 15, (14 + 1) & 15);
+        self.M(15, (15 + 14) & 15, (15 + 9) & 15, (15 + 1) & 15);
     }
 
     #[inline(always)]
@@ -120,9 +134,23 @@ impl W {
             0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
             0xc67178f2,
         ];
-        for (i, &c) in ROUND_CONSTANTS.iter().skip(s * 16).take(16).enumerate() {
-            self.F(state, i, c);
-        }
+        let rc = &ROUND_CONSTANTS[s * 16..];
+        self.F(state, 0, rc[0]);
+        self.F(state, 1, rc[1]);
+        self.F(state, 2, rc[2]);
+        self.F(state, 3, rc[3]);
+        self.F(state, 4, rc[4]);
+        self.F(state, 5, rc[5]);
+        self.F(state, 6, rc[6]);
+        self.F(state, 7, rc[7]);
+        self.F(state, 8, rc[8]);
+        self.F(state, 9, rc[9]);
+        self.F(state, 10, rc[10]);
+        self.F(state, 11, rc[11]);
+        self.F(state, 12, rc[12]);
+        self.F(state, 13, rc[13]);
+        self.F(state, 14, rc[14]);
+        self.F(state, 15, rc[15]);
     }
 }
 
@@ -142,9 +170,16 @@ impl State {
 
     #[inline(always)]
     fn add(&mut self, x: &State) {
-        for (e, &ex) in self.0.iter_mut().zip(x.0.iter()) {
-            *e = e.wrapping_add(ex);
-        }
+        let sx = &mut self.0;
+        let ex = &x.0;
+        sx[0] = sx[0].wrapping_add(ex[0]);
+        sx[1] = sx[1].wrapping_add(ex[1]);
+        sx[2] = sx[2].wrapping_add(ex[2]);
+        sx[3] = sx[3].wrapping_add(ex[3]);
+        sx[4] = sx[4].wrapping_add(ex[4]);
+        sx[5] = sx[5].wrapping_add(ex[5]);
+        sx[6] = sx[6].wrapping_add(ex[6]);
+        sx[7] = sx[7].wrapping_add(ex[7]);
     }
 
     fn store(&self, out: &mut [u8]) {
