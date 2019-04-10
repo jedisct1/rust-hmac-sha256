@@ -76,7 +76,7 @@ impl W {
         w[a] = w[a]
             .wrapping_add(Self::sigma1(w[b]))
             .wrapping_add(w[c])
-            .wrapping_add(Self::sigma0(w[d]))
+            .wrapping_add(Self::sigma0(w[d]));
     }
 
     #[inline]
