@@ -1,6 +1,6 @@
 [package]
 name = "hmac-sha256"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Frank Denis <github@pureftpd.org>"]
 edition = "2018"
 description = "A small, self-contained SHA256 and HMAC-SHA256 implementation"
