@@ -258,7 +258,7 @@ impl Hash {
         let r = if self.r < 56 { 64 } else { 128 };
         let bits = self.len * 8;
         for i in 0..8 {
-            padded[r - 8 + i] = (bits >> (56 - i * 8)) as u8;
+            padded[r - 8 + i] = (bits as u64 >> (56 - i * 8)) as u8;
         }
         self.state.blocks(&padded[..r]);
         let mut out = [0u8; 32];
