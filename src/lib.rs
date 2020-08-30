@@ -227,7 +227,8 @@ impl Hash {
         }
     }
 
-    fn _update(&mut self, input: &[u8]) {
+    fn _update<T: AsRef<[u8]>>(&mut self, input: T) {
+        let input = input.as_ref();
         let mut n = input.len();
         self.len += n;
         let av = 64 - self.r;
@@ -250,7 +251,7 @@ impl Hash {
     }
 
     /// Absorb content
-    pub fn update(&mut self, input: &[u8]) {
+    pub fn update<T: AsRef<[u8]>>(&mut self, input: T) {
         self._update(input)
     }
 
@@ -301,7 +302,7 @@ impl HMAC {
         for (p, &k) in padded.iter_mut().zip(k2.iter()) {
             *p ^= k;
         }
-        ih.update(&padded);
+        ih.update(&padded[..]);
         ih.update(input);
 
         let mut oh = Hash::new();
@@ -309,7 +310,7 @@ impl HMAC {
         for (p, &k) in padded.iter_mut().zip(k2.iter()) {
             *p ^= k;
         }
-        oh.update(&padded);
+        oh.update(&padded[..]);
         oh.update(&ih.finalize());
         oh.finalize()
     }
@@ -327,7 +328,7 @@ mod digest_trait {
 
     impl Update for Hash {
         fn update(&mut self, input: impl AsRef<[u8]>) {
-            self._update(input.as_ref())
+            self._update(input)
         }
     }
 
