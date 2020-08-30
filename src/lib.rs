@@ -311,6 +311,38 @@ impl HMAC {
     }
 }
 
+#[cfg(feature = "traits")]
+mod digest_trait {
+    use super::{Hash, State};
+    use digest::consts::{U32, U64};
+    use digest::{BlockInput, FixedOutputDirty, Reset, Update};
+
+    impl BlockInput for Hash {
+        type BlockSize = U64;
+    }
+
+    impl Update for Hash {
+        fn update(&mut self, input: impl AsRef<[u8]>) {
+            self.update(input.as_ref());
+        }
+    }
+
+    impl FixedOutputDirty for Hash {
+        type OutputSize = U32;
+
+        fn finalize_into_dirty(&mut self, out: &mut digest::Output<Self>) {
+            let h = self.finalize();
+            out.copy_from_slice(&h);
+        }
+    }
+
+    impl Reset for Hash {
+        fn reset(&mut self) {
+            self.state = State::new();
+        }
+    }
+}
+
 #[test]
 fn main() {
     let h = HMAC::mac(&[], &[0u8; 32]);
