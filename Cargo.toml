@@ -14,7 +14,7 @@ license = "ISC"
 digest = { version = "0.9", optional = true }
 
 [features]
-default = ["traits"]
+default = []
 traits = ["digest"]
 
 [profile.release]
