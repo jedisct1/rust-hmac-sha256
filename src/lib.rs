@@ -227,8 +227,7 @@ impl Hash {
         }
     }
 
-    /// Absorb content
-    pub fn update(&mut self, input: &[u8]) {
+    fn _update(&mut self, input: &[u8]) {
         let mut n = input.len();
         self.len += n;
         let av = 64 - self.r;
@@ -248,6 +247,11 @@ impl Hash {
                 self.r = rb;
             }
         }
+    }
+
+    /// Absorb content
+    pub fn update(&mut self, input: &[u8]) {
+        self._update(input)
     }
 
     /// Compute SHA256(absorbed content)
@@ -323,7 +327,7 @@ mod digest_trait {
 
     impl Update for Hash {
         fn update(&mut self, input: impl AsRef<[u8]>) {
-            self.update(input.as_ref());
+            self._update(input.as_ref())
         }
     }
 

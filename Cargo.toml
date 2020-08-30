@@ -1,6 +1,6 @@
 [package]
 name = "hmac-sha256"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Frank Denis <github@pureftpd.org>"]
 edition = "2018"
 description = "A small, self-contained SHA256 and HMAC-SHA256 implementation"
@@ -14,7 +14,7 @@ license = "ISC"
 digest = { version = "0.9", optional = true }
 
 [features]
-default = []
+default = ["traits"]
 traits = ["digest"]
 
 [profile.release]
