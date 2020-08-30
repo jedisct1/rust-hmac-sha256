@@ -317,7 +317,7 @@ impl HMAC {
 
 #[cfg(feature = "traits")]
 mod digest_trait {
-    use super::{Hash, State};
+    use super::Hash;
     use digest::consts::{U32, U64};
     use digest::{BlockInput, FixedOutputDirty, Reset, Update};
 
@@ -342,7 +342,7 @@ mod digest_trait {
 
     impl Reset for Hash {
         fn reset(&mut self) {
-            self.state = State::new();
+            *self = Self::new()
         }
     }
 }
