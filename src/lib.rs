@@ -299,19 +299,18 @@ impl HMAC {
         } else {
             k
         };
-        let mut ih = Hash::new();
         let mut padded = [0x36; 64];
         for (p, &k) in padded.iter_mut().zip(k2.iter()) {
             *p ^= k;
         }
+        let mut ih = Hash::new();
         ih.update(&padded[..]);
         ih.update(input);
 
-        let mut oh = Hash::new();
-        padded = [0x5c; 64];
-        for (p, &k) in padded.iter_mut().zip(k2.iter()) {
-            *p ^= k;
+        for p in padded.iter_mut() {
+            *p ^= 0x6a;
         }
+        let mut oh = Hash::new();
         oh.update(&padded[..]);
         oh.update(&ih.finalize());
         oh.finalize()
