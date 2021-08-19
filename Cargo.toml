@@ -8,7 +8,7 @@ keywords = ["crypto", "hash", "hmac", "sha2", "sha256"]
 repository = "https://github.com/jedisct1/rust-hmac-sha256"
 homepage = "https://github.com/jedisct1/rust-hmac-sha256"
 categories = ["algorithms", "cryptography", "no-std"]
-license-file = "LICENSE"
+license = "ISC"
 
 [dependencies]
 digest = { version = "0.9", optional = true }
