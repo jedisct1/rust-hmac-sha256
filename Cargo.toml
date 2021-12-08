@@ -1,6 +1,6 @@
 [package]
 name = "hmac-sha256"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Frank Denis <github@pureftpd.org>"]
 edition = "2018"
 description = "A small, self-contained SHA256 and HMAC-SHA256 implementation"
@@ -11,7 +11,7 @@ categories = ["algorithms", "cryptography", "no-std"]
 license = "ISC"
 
 [dependencies]
-digest = { version = "0.9", optional = true }
+digest = { version = "0.10.0", optional = true }
 
 [features]
 default = []

@@ -317,26 +317,60 @@ impl HMAC {
     }
 }
 
+/// Wrapped `Hash` type for the `Digest` trait.
+#[cfg(feature = "traits")]
+pub type WrappedHash = digest::core_api::CoreWrapper<Hash>;
+
 #[cfg(feature = "traits")]
 mod digest_trait {
     use super::Hash;
-    use digest::consts::{U32, U64};
-    use digest::{BlockInput, FixedOutputDirty, Reset, Update};
+    use core::fmt;
+    use digest::{
+        block_buffer::Eager,
+        consts::{U32, U64},
+        core_api::{
+            AlgorithmName, Block, BlockSizeUser, Buffer, BufferKindUser, FixedOutputCore,
+            OutputSizeUser, Reset, UpdateCore,
+        },
+        HashMarker,
+    };
 
-    impl BlockInput for Hash {
-        type BlockSize = U64;
-    }
-
-    impl Update for Hash {
-        fn update(&mut self, input: impl AsRef<[u8]>) {
-            self._update(input)
+    impl AlgorithmName for Hash {
+        fn write_alg_name(f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("Sha256")
         }
     }
 
-    impl FixedOutputDirty for Hash {
-        type OutputSize = U32;
+    impl HashMarker for Hash {}
 
-        fn finalize_into_dirty(&mut self, out: &mut digest::Output<Self>) {
+    impl BufferKindUser for Hash {
+        type BufferKind = Eager;
+    }
+
+    impl BlockSizeUser for Hash {
+        type BlockSize = U64;
+    }
+
+    impl OutputSizeUser for Hash {
+        type OutputSize = U32;
+    }
+
+    impl UpdateCore for Hash {
+        #[inline]
+        fn update_blocks(&mut self, blocks: &[Block<Self>]) {
+            for block in blocks {
+                self._update(block);
+            }
+        }
+    }
+
+    impl FixedOutputCore for Hash {
+        fn finalize_fixed_core(
+            &mut self,
+            buffer: &mut Buffer<Self>,
+            out: &mut digest::Output<Self>,
+        ) {
+            self._update(buffer.get_data());
             let h = self.finalize();
             out.copy_from_slice(&h);
         }
