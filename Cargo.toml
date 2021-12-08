@@ -11,7 +11,7 @@ categories = ["algorithms", "cryptography", "no-std"]
 license = "ISC"
 
 [dependencies]
-digest = { version = "0.9", optional = true }
+digest = { version = "0.10", optional = true }
 
 [features]
 default = []
