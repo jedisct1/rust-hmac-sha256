@@ -287,6 +287,7 @@ impl Default for Hash {
     }
 }
 
+#[derive(Clone)]
 pub struct HMAC {
     ih: Hash,
     padded: [u8; 64],
