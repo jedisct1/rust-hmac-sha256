@@ -229,7 +229,7 @@ impl Hash {
         }
     }
 
-    fn _update<T: AsRef<[u8]>>(&mut self, input: T) {
+    fn _update(&mut self, input: impl AsRef<[u8]>) {
         let input = input.as_ref();
         let mut n = input.len();
         self.len += n;
@@ -253,7 +253,7 @@ impl Hash {
     }
 
     /// Absorb content
-    pub fn update<T: AsRef<[u8]>>(&mut self, input: T) {
+    pub fn update(&mut self, input: impl AsRef<[u8]>) {
         self._update(input)
     }
 
@@ -287,11 +287,16 @@ impl Default for Hash {
     }
 }
 
-pub struct HMAC;
+pub struct HMAC {
+    ih: Hash,
+    padded: [u8; 64],
+}
 
 impl HMAC {
     /// Compute HMAC-SHA256(`input`, `k`)
-    pub fn mac(input: &[u8], k: &[u8]) -> [u8; 32] {
+    pub fn mac(input: impl AsRef<[u8]>, k: impl AsRef<[u8]>) -> [u8; 32] {
+        let input = input.as_ref();
+        let k = k.as_ref();
         let mut hk = [0u8; 32];
         let k2 = if k.len() > 64 {
             hk.copy_from_slice(&Hash::hash(k));
@@ -314,6 +319,70 @@ impl HMAC {
         oh.update(&padded[..]);
         oh.update(&ih.finalize());
         oh.finalize()
+    }
+
+    pub fn new(k: impl AsRef<[u8]>) -> HMAC {
+        let k = k.as_ref();
+        let mut hk = [0u8; 32];
+        let k2 = if k.len() > 64 {
+            hk.copy_from_slice(&Hash::hash(k));
+            &hk
+        } else {
+            k
+        };
+        let mut padded = [0x36; 64];
+        for (p, &k) in padded.iter_mut().zip(k2.iter()) {
+            *p ^= k;
+        }
+        let mut ih = Hash::new();
+        ih.update(&padded[..]);
+        HMAC { ih, padded }
+    }
+
+    /// Absorb content
+    pub fn update(&mut self, input: impl AsRef<[u8]>) {
+        self.ih.update(input);
+    }
+
+    /// Compute HMAC-SHA256 over the entire input
+    pub fn finalize(mut self) -> [u8; 32] {
+        for p in self.padded.iter_mut() {
+            *p ^= 0x6a;
+        }
+        let mut oh = Hash::new();
+        oh.update(&self.padded[..]);
+        oh.update(&self.ih.finalize());
+        oh.finalize()
+    }
+}
+
+pub struct HKDF;
+
+impl HKDF {
+    pub fn extract(salt: impl AsRef<[u8]>, ikm: impl AsRef<[u8]>) -> [u8; 32] {
+        let mut h = Hash::new();
+        h.update(ikm);
+        h.update(salt);
+        h.finalize()
+    }
+
+    pub fn expand(out: &mut [u8], prk: impl AsRef<[u8]>, info: impl AsRef<[u8]>) {
+        let info = info.as_ref();
+        let mut counter: u8 = 1;
+        assert!(out.len() < 0xff * 32);
+        let mut i: usize = 0;
+        while i < out.len() {
+            let mut hmac = HMAC::new(&prk);
+            if i != 0 {
+                hmac.update(&out[i - 32..][..32]);
+            }
+            hmac.update(info);
+            hmac.update(&[counter]);
+            let left = core::cmp::min(32, out.len() - i);
+            out[i..][..left].copy_from_slice(&hmac.finalize()[..left]);
+            counter += 1;
+            i += 32;
+        }
     }
 }
 
@@ -437,6 +506,30 @@ fn main() {
         &[
             112, 156, 120, 216, 86, 25, 79, 210, 155, 193, 32, 120, 116, 134, 237, 14, 198, 1, 64,
             41, 124, 196, 103, 91, 109, 216, 36, 133, 4, 234, 218, 228
+        ]
+    );
+
+    let mut s = HMAC::new(&[42u8; 50]);
+    s.update(&[69u8; 150]);
+    s.update(&[69u8; 100]);
+    let h = s.finalize();
+    assert_eq!(
+        &h[..],
+        &[
+            112, 156, 120, 216, 86, 25, 79, 210, 155, 193, 32, 120, 116, 134, 237, 14, 198, 1, 64,
+            41, 124, 196, 103, 91, 109, 216, 36, 133, 4, 234, 218, 228
+        ]
+    );
+
+    let prk = HKDF::extract(b"salt", b"ikm");
+    let mut k = [0u8; 40];
+    HKDF::expand(&mut k, prk, b"info");
+    assert_eq!(
+        &k[..],
+        &[
+            172, 13, 156, 36, 211, 159, 106, 191, 93, 127, 136, 65, 104, 70, 215, 70, 109, 203,
+            137, 2, 31, 6, 22, 67, 173, 225, 226, 31, 6, 254, 31, 215, 62, 238, 61, 1, 221, 36,
+            173, 183
         ]
     );
 }

@@ -1,6 +1,6 @@
 # rust-hmac-sha256
 
-A small, self-contained SHA256 and HMAC-SHA256 implementation in Rust.
+A small, self-contained SHA256, HMAC-SHA256, and HKDF-SHA256 implementation in Rust.
 
 Optional features:
 
