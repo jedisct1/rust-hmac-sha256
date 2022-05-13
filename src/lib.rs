@@ -393,8 +393,8 @@ pub type WrappedHash = digest010::core_api::CoreWrapper<Hash>;
 
 #[cfg(feature = "traits010")]
 mod digest_trait010 {
-    use super::Hash;
     use core::fmt;
+
     use digest010::{
         block_buffer::Eager,
         consts::{U32, U64},
@@ -404,6 +404,8 @@ mod digest_trait010 {
         },
         HashMarker, Output,
     };
+
+    use super::Hash;
 
     impl AlgorithmName for Hash {
         fn write_alg_name(f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -451,9 +453,10 @@ mod digest_trait010 {
 
 #[cfg(feature = "traits09")]
 mod digest_trait09 {
-    use super::Hash;
     use digest09::consts::{U32, U64};
     use digest09::{BlockInput, FixedOutputDirty, Output, Reset, Update};
+
+    use super::Hash;
 
     impl BlockInput for Hash {
         type BlockSize = U64;
