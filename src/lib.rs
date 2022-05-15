@@ -361,10 +361,7 @@ pub struct HKDF;
 
 impl HKDF {
     pub fn extract(salt: impl AsRef<[u8]>, ikm: impl AsRef<[u8]>) -> [u8; 32] {
-        let mut h = Hash::new();
-        h.update(ikm);
-        h.update(salt);
-        h.finalize()
+        HMAC::mac(ikm, salt)
     }
 
     pub fn expand(out: &mut [u8], prk: impl AsRef<[u8]>, info: impl AsRef<[u8]>) {
@@ -525,15 +522,20 @@ fn main() {
         ]
     );
 
-    let prk = HKDF::extract(b"salt", b"ikm");
+    let ikm = [0x0bu8; 22];
+    let salt = [
+        0x00u8, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+    ];
+    let context = [0xf0u8, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9];
+    let prk = HKDF::extract(salt, ikm);
     let mut k = [0u8; 40];
-    HKDF::expand(&mut k, prk, b"info");
+    HKDF::expand(&mut k, prk, context);
     assert_eq!(
         &k[..],
         &[
-            172, 13, 156, 36, 211, 159, 106, 191, 93, 127, 136, 65, 104, 70, 215, 70, 109, 203,
-            137, 2, 31, 6, 22, 67, 173, 225, 226, 31, 6, 254, 31, 215, 62, 238, 61, 1, 221, 36,
-            173, 183
+            60, 178, 95, 37, 250, 172, 213, 122, 144, 67, 79, 100, 208, 54, 47, 42, 45, 45, 10,
+            144, 207, 26, 90, 76, 93, 176, 45, 86, 236, 196, 197, 191, 52, 0, 114, 8, 213, 184,
+            135, 24
         ]
     );
 }
