@@ -394,6 +394,7 @@ mod digest_trait010 {
 
     use digest010::{
         block_buffer::Eager,
+        const_oid::{AssociatedOid, ObjectIdentifier},
         consts::{U32, U64},
         core_api::{
             AlgorithmName, Block, BlockSizeUser, Buffer, BufferKindUser, FixedOutputCore,
@@ -403,6 +404,10 @@ mod digest_trait010 {
     };
 
     use super::Hash;
+
+    impl AssociatedOid for Hash {
+        const OID: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.2.1");
+    }
 
     impl AlgorithmName for Hash {
         fn write_alg_name(f: &mut fmt::Formatter<'_>) -> fmt::Result {
