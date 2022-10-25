@@ -318,7 +318,7 @@ impl HMAC {
         }
         let mut oh = Hash::new();
         oh.update(&padded[..]);
-        oh.update(&ih.finalize());
+        oh.update(ih.finalize());
         oh.finalize()
     }
 
@@ -352,7 +352,7 @@ impl HMAC {
         }
         let mut oh = Hash::new();
         oh.update(&self.padded[..]);
-        oh.update(&self.ih.finalize());
+        oh.update(self.ih.finalize());
         oh.finalize()
     }
 }
@@ -375,7 +375,7 @@ impl HKDF {
                 hmac.update(&out[i - 32..][..32]);
             }
             hmac.update(info);
-            hmac.update(&[counter]);
+            hmac.update([counter]);
             let left = core::cmp::min(32, out.len() - i);
             out[i..][..left].copy_from_slice(&hmac.finalize()[..left]);
             counter += 1;
@@ -508,7 +508,7 @@ mod digest_trait09 {
 
 #[test]
 fn main() {
-    let h = HMAC::mac(&[], &[0u8; 32]);
+    let h = HMAC::mac([], [0u8; 32]);
     assert_eq!(
         &h[..],
         &[
@@ -517,7 +517,7 @@ fn main() {
         ]
     );
 
-    let h = HMAC::mac(&[42u8; 69], &[]);
+    let h = HMAC::mac([42u8; 69], []);
     assert_eq!(
         &h[..],
         &[
@@ -526,7 +526,7 @@ fn main() {
         ]
     );
 
-    let h = HMAC::mac(&[69u8; 250], &[42u8; 50]);
+    let h = HMAC::mac([69u8; 250], [42u8; 50]);
     assert_eq!(
         &h[..],
         &[
@@ -535,9 +535,9 @@ fn main() {
         ]
     );
 
-    let mut s = HMAC::new(&[42u8; 50]);
-    s.update(&[69u8; 150]);
-    s.update(&[69u8; 100]);
+    let mut s = HMAC::new([42u8; 50]);
+    s.update([69u8; 150]);
+    s.update([69u8; 100]);
     let h = s.finalize();
     assert_eq!(
         &h[..],
