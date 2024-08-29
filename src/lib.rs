@@ -14,7 +14,7 @@
 #[inline(always)]
 fn load_be(base: &[u8], offset: usize) -> u32 {
     let addr = &base[offset..];
-    (addr[3] as u32) | (addr[2] as u32) << 8 | (addr[1] as u32) << 16 | (addr[0] as u32) << 24
+    (addr[3] as u32) | ((addr[2] as u32) << 8) | ((addr[1] as u32) << 16) | ((addr[0] as u32) << 24)
 }
 
 #[inline(always)]
@@ -35,7 +35,7 @@ impl W {
     fn new(input: &[u8]) -> Self {
         let mut w = [0u32; 16];
         for (i, e) in w.iter_mut().enumerate() {
-            *e = load_be(input, i * 4)
+            *e = load_be(input, i * 4);
         }
         W(w)
     }
@@ -165,7 +165,7 @@ impl State {
         ];
         let mut t = [0u32; 8];
         for (i, e) in t.iter_mut().enumerate() {
-            *e = load_be(&IV, i * 4)
+            *e = load_be(&IV, i * 4);
         }
         State(t)
     }
@@ -257,6 +257,18 @@ impl Hash {
         self._update(input)
     }
 
+    /// Cache the state of the hash
+    pub fn cache_state(&self) -> [u8; 32] {
+        let mut out = [0u8; 32];
+        for (i, &state_value) in self.state.0.iter().enumerate() {
+            out[i * 4 + 0] = (state_value >> 24) as u8;
+            out[i * 4 + 1] = (state_value >> 16) as u8;
+            out[i * 4 + 2] = (state_value >> 8) as u8;
+            out[i * 4 + 3] = state_value as u8;
+        }
+        out
+    }
+
     /// Compute SHA256(absorbed content)
     pub fn finalize(mut self) -> [u8; 32] {
         let mut padded = [0u8; 128];
@@ -265,7 +277,7 @@ impl Hash {
         let r = if self.r < 56 { 64 } else { 128 };
         let bits = self.len * 8;
         for i in 0..8 {
-            padded[r - 8 + i] = (bits as u64 >> (56 - i * 8)) as u8;
+            padded[r - 8 + i] = ((bits as u64) >> (56 - i * 8)) as u8;
         }
         self.state.blocks(&padded[..r]);
         let mut out = [0u8; 32];
@@ -461,7 +473,7 @@ mod digest_trait010 {
 
     impl Reset for Hash {
         fn reset(&mut self) {
-            *self = Self::new()
+            *self = Self::new();
         }
     }
 
@@ -501,7 +513,7 @@ mod digest_trait09 {
 
     impl Reset for Hash {
         fn reset(&mut self) {
-            *self = Self::new()
+            *self = Self::new();
         }
     }
 }
@@ -513,7 +525,7 @@ fn main() {
         &h[..],
         &[
             182, 19, 103, 154, 8, 20, 217, 236, 119, 47, 149, 215, 120, 195, 95, 197, 255, 22, 151,
-            196, 147, 113, 86, 83, 198, 199, 18, 20, 66, 146, 197, 173
+            196, 147, 113, 86, 83, 198, 199, 18, 20, 66, 146, 197, 173,
         ]
     );
 
@@ -522,7 +534,7 @@ fn main() {
         &h[..],
         &[
             225, 88, 35, 8, 78, 185, 165, 6, 235, 124, 28, 250, 112, 124, 159, 119, 159, 88, 184,
-            61, 7, 37, 166, 229, 71, 154, 83, 153, 151, 181, 182, 72
+            61, 7, 37, 166, 229, 71, 154, 83, 153, 151, 181, 182, 72,
         ]
     );
 
@@ -531,7 +543,7 @@ fn main() {
         &h[..],
         &[
             112, 156, 120, 216, 86, 25, 79, 210, 155, 193, 32, 120, 116, 134, 237, 14, 198, 1, 64,
-            41, 124, 196, 103, 91, 109, 216, 36, 133, 4, 234, 218, 228
+            41, 124, 196, 103, 91, 109, 216, 36, 133, 4, 234, 218, 228,
         ]
     );
 
@@ -543,7 +555,7 @@ fn main() {
         &h[..],
         &[
             112, 156, 120, 216, 86, 25, 79, 210, 155, 193, 32, 120, 116, 134, 237, 14, 198, 1, 64,
-            41, 124, 196, 103, 91, 109, 216, 36, 133, 4, 234, 218, 228
+            41, 124, 196, 103, 91, 109, 216, 36, 133, 4, 234, 218, 228,
         ]
     );
 
@@ -560,7 +572,32 @@ fn main() {
         &[
             60, 178, 95, 37, 250, 172, 213, 122, 144, 67, 79, 100, 208, 54, 47, 42, 45, 45, 10,
             144, 207, 26, 90, 76, 93, 176, 45, 86, 236, 196, 197, 191, 52, 0, 114, 8, 213, 184,
-            135, 24
+            135, 24,
+        ]
+    );
+}
+
+#[test]
+fn test_cache_state() {
+    let mut h = Hash::new();
+
+    h.update([]);
+
+    let state = h.cache_state();
+    assert_eq!(
+        state,
+        [
+            106, 9, 230, 103, 187, 103, 174, 133, 60, 110, 243, 114, 165, 79, 245, 58, 81, 14, 82,
+            127, 155, 5, 104, 140, 31, 131, 217, 171, 91, 224, 205, 25,
+        ]
+    );
+
+    let digest = h.finalize();
+    assert_eq!(
+        digest,
+        [
+            227, 176, 196, 66, 152, 252, 28, 20, 154, 251, 244, 200, 153, 111, 185, 36, 39, 174,
+            65, 228, 100, 155, 147, 76, 164, 149, 153, 27, 120, 82, 184, 85,
         ]
     );
 }
