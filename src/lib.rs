@@ -1,5 +1,5 @@
 //! A small, self-contained SHA256 and HMAC-SHA256 implementation
-//! (C) Frank Denis <fdenis [at] fastly [dot] com>, public domain
+//! (C) Frank Denis <fdenis [at] fastly [dot] com>
 
 #![no_std]
 #![allow(
