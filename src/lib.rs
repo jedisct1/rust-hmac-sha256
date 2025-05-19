@@ -575,61 +575,24 @@ impl HMAC {
         oh.finalize()
     }
 
-    /// Verifies that the HMAC of absorbed content matches the expected value.
+    /// Verifies that the HMAC of absorbed content matches the expected MAC.
     ///
     /// This provides constant-time comparison to prevent timing attacks.
     ///
     /// # Example
     ///
     /// ```
-    /// let expected = hmac_sha256::HMAC::mac(b"message data", b"secret key");
+    /// let expected = hmac_sha256::HMAC::mac(b"original data", b"secret key");
     ///
     /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
-    /// hmac.update(b"message data");
+    /// hmac.update(b"original data");
     /// assert!(hmac.verify(&expected));
     ///
     /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
-    /// hmac.update(b"tampered data");
+    /// hmac.update(b"modified data");
     /// assert!(!hmac.verify(&expected));
     /// ```
     pub fn verify(self, expected: &[u8; 32]) -> bool {
-        let out = self.finalize();
-        verify(&out, expected)
-    }
-
-    /// Verifies that the HMAC of absorbed content matches the expected value using a reference.
-    ///
-    /// This method accepts a reference to a slice of bytes and verifies against it using
-    /// constant-time comparison to prevent timing attacks. Unlike `verify`, this method
-    /// does not require the expected value to be exactly 32 bytes.
-    ///
-    /// # Arguments
-    ///
-    /// * `expected` - The expected HMAC value to compare against
-    ///
-    /// # Returns
-    ///
-    /// `true` if the computed HMAC matches the expected value, `false` otherwise
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// let expected = hmac_sha256::HMAC::mac(b"message data", b"secret key");
-    ///
-    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
-    /// hmac.update(b"message data");
-    /// assert!(hmac.verify_with_ref(&expected));
-    ///
-    /// // Can also verify with a slice
-    /// let expected_slice = &expected[..];
-    /// let mut hmac2 = hmac_sha256::HMAC::new(b"secret key");
-    /// hmac2.update(b"message data");
-    /// assert!(hmac2.verify_with_ref(expected_slice));
-    /// ```
-    pub fn verify_with_ref(self, expected: &[u8]) -> bool {
-        if expected.len() != 32 {
-            return false;
-        }
         let out = self.finalize();
         verify(&out, expected)
     }
@@ -884,6 +847,16 @@ fn main() {
         ]
     );
 
+    // Test HMAC verify function
+    let expected_mac = HMAC::mac([69u8; 250], [42u8; 50]);
+    let mut hmac = HMAC::new([42u8; 50]);
+    hmac.update([69u8; 250]);
+    assert!(hmac.verify(&expected_mac));
+
+    let mut hmac = HMAC::new([42u8; 50]);
+    hmac.update([69u8; 251]); // Different data
+    assert!(!hmac.verify(&expected_mac));
+
     let ikm = [0x0bu8; 22];
     let salt = [
         0x00u8, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
@@ -900,127 +873,4 @@ fn main() {
             135, 24
         ]
     );
-}
-
-#[test]
-fn test2() {
-    let data = b"test data for hash verification";
-    let mut hash = Hash::new();
-    hash.update(data);
-    let digest = hash.finalize();
-
-    let mut verifier = Hash::new();
-    verifier.update(data);
-    assert!(verifier.verify(&digest));
-
-    let mut incorrect_digest = digest;
-    incorrect_digest[0] ^= 1;
-    let mut verifier = Hash::new();
-    verifier.update(data);
-    assert!(!verifier.verify(&incorrect_digest));
-
-    let mut verifier = Hash::new();
-    verifier.update(b"different data");
-    assert!(!verifier.verify(&digest));
-
-    let key = b"hmac verification key";
-    let data = b"test data for hmac verification";
-    let mut hmac = HMAC::new(key);
-    hmac.update(data);
-    let mac = hmac.finalize();
-
-    let mut verifier = HMAC::new(key);
-    verifier.update(data);
-    assert!(verifier.verify(&mac));
-
-    let mut incorrect_mac = mac;
-    incorrect_mac[0] ^= 1;
-    let mut verifier = HMAC::new(key);
-    verifier.update(data);
-    assert!(!verifier.verify(&incorrect_mac));
-
-    let mut verifier = HMAC::new(b"different key");
-    verifier.update(data);
-    assert!(!verifier.verify(&mac));
-
-    let mut verifier = HMAC::new(key);
-    verifier.update(b"different data");
-    assert!(!verifier.verify(&mac));
-}
-
-#[test]
-fn test_verify_with_ref() {
-    // Test Hash verify_with_ref functionality
-    let data = b"test data for hash reference verification";
-    let digest = Hash::hash(data);
-    let digest_slice = &digest[..];
-
-    let mut hasher = Hash::new();
-    hasher.update(data);
-    assert!(hasher.verify_with_ref(digest_slice));
-
-    // Verify with incorrect length fails
-    let mut hasher = Hash::new();
-    hasher.update(data);
-    assert!(!hasher.verify_with_ref(&digest_slice[..16]));
-
-    // Verify with incorrect content fails
-    let mut incorrect_digest = digest;
-    incorrect_digest[0] ^= 1;
-    let mut hasher = Hash::new();
-    hasher.update(data);
-    assert!(!hasher.verify_with_ref(&incorrect_digest));
-
-    // Test HMAC verify_with_ref functionality
-    let key = b"hmac reference verification key";
-    let data = b"test data for hmac reference verification";
-    let mac = HMAC::mac(data, key);
-    let mac_slice = &mac[..];
-
-    let mut hmac = HMAC::new(key);
-    hmac.update(data);
-    assert!(hmac.verify_with_ref(mac_slice));
-
-    // Verify with incorrect length fails
-    let mut hmac = HMAC::new(key);
-    hmac.update(data);
-    assert!(!hmac.verify_with_ref(&mac_slice[..16]));
-
-    // Verify with incorrect content fails
-    let mut incorrect_mac = mac;
-    incorrect_mac[0] ^= 1;
-    let mut hmac = HMAC::new(key);
-    hmac.update(data);
-    assert!(!hmac.verify_with_ref(&incorrect_mac));
-}
-
-#[test]
-fn test_hkdf() {
-    // Test vectors based on RFC 5869 Test Case 1 (adjusted for SHA-256)
-    let ikm =
-        b"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b";
-    let salt = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c";
-    let info = b"\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9";
-
-    // Incremental API
-    let prk = HKDF::extract(salt, ikm);
-    let mut okm1 = [0u8; 42];
-    HKDF::expand(&mut okm1, prk, info);
-
-    // Test expansion with different output sizes
-    let mut okm2 = [0u8; 32];
-    HKDF::expand(&mut okm2, prk, info);
-    assert_eq!(&okm1[..32], &okm2);
-
-    // Test with empty salt
-    let prk_empty_salt = HKDF::extract(&[] as &[u8], ikm);
-    let mut okm3 = [0u8; 42];
-    HKDF::expand(&mut okm3, prk_empty_salt, info);
-
-    // Test with empty info
-    let mut okm4 = [0u8; 42];
-    HKDF::expand(&mut okm4, prk, &[] as &[u8]);
-
-    // Test that different info produces different output
-    assert_ne!(okm1, okm4);
 }
