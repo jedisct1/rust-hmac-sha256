@@ -369,21 +369,40 @@ impl Hash {
     ///
     /// let mut hasher = hmac_sha256::Hash::new();
     /// hasher.update(b"original data");
-    /// assert!(hasher.verify(&expected));
+    /// assert!(hasher.finalize_verify(&expected));
     ///
     /// let mut hasher = hmac_sha256::Hash::new();
     /// hasher.update(b"modified data");
-    /// assert!(!hasher.verify(&expected));
+    /// assert!(!hasher.finalize_verify(&expected));
     /// ```
-    pub fn verify(self, expected: &[u8; 32]) -> bool {
+    pub fn finalize_verify(self, expected: &[u8; 32]) -> bool {
         let out = self.finalize();
         verify(&out, expected)
+    }
+
+    /// Hashes the provided input and verifies it against the expected digest in a single operation.
+    ///
+    /// This is a convenience method that combines hashing and verification in a single call.
+    /// It provides constant-time comparison to prevent timing attacks.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let expected = hmac_sha256::Hash::hash(b"original data");
+    ///
+    /// // Verify in one shot
+    /// assert!(hmac_sha256::Hash::verify(b"original data", &expected));
+    /// assert!(!hmac_sha256::Hash::verify(b"modified data", &expected));
+    /// ```
+    pub fn verify(input: impl AsRef<[u8]>, expected: &[u8; 32]) -> bool {
+        let hash = Self::hash(input.as_ref());
+        verify(&hash, expected)
     }
 
     /// Verifies that the hash of absorbed content matches the expected digest using a reference.
     ///
     /// This method accepts a reference to a slice of bytes and verifies against it using
-    /// constant-time comparison to prevent timing attacks. Unlike `verify`, this method
+    /// constant-time comparison to prevent timing attacks. Unlike `finalize_verify`, this method
     /// does not require the expected value to be exactly 32 bytes.
     ///
     /// # Arguments
@@ -408,6 +427,9 @@ impl Hash {
     /// let mut hasher2 = hmac_sha256::Hash::new();
     /// hasher2.update(b"original data");
     /// assert!(hasher2.verify_with_ref(expected_slice));
+    ///
+    /// // Or use the one-shot verification
+    /// assert!(hmac_sha256::Hash::verify(b"original data", &expected));
     /// ```
     pub fn verify_with_ref(self, expected: &[u8]) -> bool {
         if expected.len() != 32 {
@@ -856,6 +878,20 @@ fn main() {
     let mut hmac = HMAC::new([42u8; 50]);
     hmac.update([69u8; 251]); // Different data
     assert!(!hmac.verify(&expected_mac));
+
+    // Test Hash verify function
+    let expected_hash = Hash::hash(&[42u8; 123]);
+    assert!(Hash::verify(&[42u8; 123], &expected_hash));
+    assert!(!Hash::verify(&[42u8; 124], &expected_hash));
+
+    // Test Hash finalize_verify function
+    let mut hasher = Hash::new();
+    hasher.update(&[42u8; 123]);
+    assert!(hasher.finalize_verify(&expected_hash));
+
+    let mut hasher = Hash::new();
+    hasher.update(&[42u8; 124]); // Different data
+    assert!(!hasher.finalize_verify(&expected_hash));
 
     let ikm = [0x0bu8; 22];
     let salt = [
