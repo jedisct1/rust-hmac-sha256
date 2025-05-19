@@ -22,6 +22,10 @@
 //! // Create an HMAC-SHA256
 //! let mac = hmac_sha256::HMAC::mac(b"message", b"key");
 //!
+//! // Verify an HMAC-SHA256 in one shot
+//! let expected = hmac_sha256::HMAC::mac(b"message", b"key");
+//! assert!(hmac_sha256::HMAC::verify(b"message", b"key", &expected));
+//!
 //! // Use HKDF-SHA256 for key derivation
 //! let prk = hmac_sha256::HKDF::extract(b"salt", b"input key material");
 //! let mut output = [0u8; 32];
@@ -609,19 +613,48 @@ impl HMAC {
     /// # Example
     ///
     /// ```
-    /// let expected = hmac_sha256::HMAC::mac(b"original data", b"secret key");
+    /// let expected = hmac_sha256::HMAC::mac(b"message", b"key");
     ///
-    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
-    /// hmac.update(b"original data");
-    /// assert!(hmac.verify(&expected));
+    /// let mut hmac = hmac_sha256::HMAC::new(b"key");
+    /// hmac.update(b"message");
+    /// assert!(hmac.finalize_verify(&expected));
     ///
-    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
-    /// hmac.update(b"modified data");
-    /// assert!(!hmac.verify(&expected));
+    /// let mut hmac = hmac_sha256::HMAC::new(b"key");
+    /// hmac.update(b"modified message");
+    /// assert!(!hmac.finalize_verify(&expected));
     /// ```
-    pub fn verify(self, expected: &[u8; 32]) -> bool {
+    pub fn finalize_verify(self, expected: &[u8; 32]) -> bool {
         let out = self.finalize();
         verify(&out, expected)
+    }
+
+    /// Verifies that the HMAC of the provided input using the given key matches the expected MAC.
+    ///
+    /// This is a convenience method that combines HMAC computation and verification in a single call.
+    /// It provides constant-time comparison to prevent timing attacks.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - The message data to authenticate
+    /// * `k` - The secret key
+    /// * `expected` - The expected HMAC value to compare against
+    ///
+    /// # Returns
+    ///
+    /// `true` if the computed HMAC matches the expected value, `false` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mac = hmac_sha256::HMAC::mac(b"message", b"key");
+    ///
+    /// // Verify in one shot
+    /// assert!(hmac_sha256::HMAC::verify(b"message", b"key", &mac));
+    /// assert!(!hmac_sha256::HMAC::verify(b"modified message", b"key", &mac));
+    /// ```
+    pub fn verify(input: impl AsRef<[u8]>, k: impl AsRef<[u8]>, expected: &[u8; 32]) -> bool {
+        let mac = Self::mac(input, k);
+        verify(&mac, expected)
     }
 }
 
@@ -878,11 +911,16 @@ fn main() {
     let expected_mac = HMAC::mac([69u8; 250], [42u8; 50]);
     let mut hmac = HMAC::new([42u8; 50]);
     hmac.update([69u8; 250]);
-    assert!(hmac.verify(&expected_mac));
+    assert!(hmac.finalize_verify(&expected_mac));
 
     let mut hmac = HMAC::new([42u8; 50]);
     hmac.update([69u8; 251]); // Different data
-    assert!(!hmac.verify(&expected_mac));
+    assert!(!hmac.finalize_verify(&expected_mac));
+
+    // Test HMAC one-shot verify function
+    assert!(HMAC::verify([69u8; 250], [42u8; 50], &expected_mac));
+    assert!(!HMAC::verify([69u8; 251], [42u8; 50], &expected_mac)); // Different data
+    assert!(!HMAC::verify([69u8; 250], [43u8; 50], &expected_mac)); // Different key
 
     // Test Hash verify function
     let expected_hash = Hash::hash(&[42u8; 123]);
