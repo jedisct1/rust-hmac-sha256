@@ -1,5 +1,28 @@
-//! A small, self-contained SHA256 and HMAC-SHA256 implementation
+//! A small, self-contained SHA256, HMAC-SHA256, and HKDF-SHA256 implementation
 //! (C) Frank Denis <fdenis [at] fastly [dot] com>
+//!
+//! This library provides a lightweight implementation of SHA-256, HMAC-SHA256, and HKDF-SHA256
+//! cryptographic functions with no external dependencies (unless the `traits` feature is enabled).
+//!
+//! # Features
+//!
+//! - `traits`: Enables support for the `Digest` trait from the `digest` crate
+//! - `opt_size`: Enables size optimizations (reduces `.text` section size by ~75% with ~16% performance cost)
+//!
+//! # Examples
+//!
+//! ```
+//! // Calculate a SHA-256 hash
+//! let hash = hmac_sha256::Hash::hash(b"hello world");
+//!
+//! // Create an HMAC-SHA256
+//! let mac = hmac_sha256::HMAC::mac(b"message", b"key");
+//!
+//! // Use HKDF-SHA256 for key derivation
+//! let prk = hmac_sha256::HKDF::extract(b"salt", b"input key material");
+//! let mut output = [0u8; 32];
+//! hmac_sha256::HKDF::expand(&mut output, prk, b"context info");
+//! ```
 
 #![no_std]
 #![allow(
@@ -234,6 +257,24 @@ impl State {
 }
 
 #[derive(Copy, Clone)]
+/// SHA-256 hash implementation.
+///
+/// This struct provides both streaming and one-shot APIs for computing SHA-256 hashes.
+///
+/// # Examples
+///
+/// One-shot hashing:
+/// ```
+/// let hash = hmac_sha256::Hash::hash(b"hello world");
+/// ```
+///
+/// Incremental hashing:
+/// ```
+/// let mut hasher = hmac_sha256::Hash::new();
+/// hasher.update(b"hello ");
+/// hasher.update(b"world");
+/// let hash = hasher.finalize();
+/// ```
 pub struct Hash {
     state: State,
     w: [u8; 64],
@@ -242,6 +283,7 @@ pub struct Hash {
 }
 
 impl Hash {
+    /// Creates a new SHA-256 hasher.
     pub fn new() -> Hash {
         Hash {
             state: State::new(),
@@ -274,12 +316,33 @@ impl Hash {
         }
     }
 
-    /// Absorb content
+    /// Absorbs content into the hasher state.
+    ///
+    /// This method can be called multiple times to incrementally add data to be hashed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut hasher = hmac_sha256::Hash::new();
+    /// hasher.update(b"first chunk");
+    /// hasher.update(b"second chunk");
+    /// let hash = hasher.finalize();
+    /// ```
     pub fn update(&mut self, input: impl AsRef<[u8]>) {
         self._update(input)
     }
 
-    /// Compute SHA256(absorbed content)
+    /// Computes the SHA-256 hash of all previously absorbed content.
+    ///
+    /// This method consumes the hasher and returns the computed 32-byte digest.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut hasher = hmac_sha256::Hash::new();
+    /// hasher.update(b"data to hash");
+    /// let hash: [u8; 32] = hasher.finalize();
+    /// ```
     pub fn finalize(mut self) -> [u8; 32] {
         let mut padded = [0u8; 128];
         padded[..self.r].copy_from_slice(&self.w[..self.r]);
@@ -295,13 +358,74 @@ impl Hash {
         out
     }
 
-    /// Verify that the hash of the absorbed content matches `expected`
+    /// Verifies that the hash of absorbed content matches the expected digest.
+    ///
+    /// This provides constant-time comparison to prevent timing attacks.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let expected = hmac_sha256::Hash::hash(b"original data");
+    ///
+    /// let mut hasher = hmac_sha256::Hash::new();
+    /// hasher.update(b"original data");
+    /// assert!(hasher.verify(&expected));
+    ///
+    /// let mut hasher = hmac_sha256::Hash::new();
+    /// hasher.update(b"modified data");
+    /// assert!(!hasher.verify(&expected));
+    /// ```
     pub fn verify(self, expected: &[u8; 32]) -> bool {
         let out = self.finalize();
         verify(&out, expected)
     }
 
-    /// Compute SHA256(`input`)
+    /// Verifies that the hash of absorbed content matches the expected digest using a reference.
+    ///
+    /// This method accepts a reference to a slice of bytes and verifies against it using
+    /// constant-time comparison to prevent timing attacks. Unlike `verify`, this method
+    /// does not require the expected value to be exactly 32 bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `expected` - The expected hash value to compare against
+    ///
+    /// # Returns
+    ///
+    /// `true` if the computed hash matches the expected value, `false` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let expected = hmac_sha256::Hash::hash(b"original data");
+    ///
+    /// let mut hasher = hmac_sha256::Hash::new();
+    /// hasher.update(b"original data");
+    /// assert!(hasher.verify_with_ref(&expected));
+    ///
+    /// // Can also verify with a slice
+    /// let expected_slice = &expected[..];
+    /// let mut hasher2 = hmac_sha256::Hash::new();
+    /// hasher2.update(b"original data");
+    /// assert!(hasher2.verify_with_ref(expected_slice));
+    /// ```
+    pub fn verify_with_ref(self, expected: &[u8]) -> bool {
+        if expected.len() != 32 {
+            return false;
+        }
+        let out = self.finalize();
+        verify(&out, expected)
+    }
+
+    /// Computes the SHA-256 hash of the provided input in a single operation.
+    ///
+    /// This is a convenience method for simple hashing operations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let hash = hmac_sha256::Hash::hash(b"data to hash");
+    /// ```
     pub fn hash(input: &[u8]) -> [u8; 32] {
         let mut h = Hash::new();
         h.update(input);
@@ -316,13 +440,48 @@ impl Default for Hash {
 }
 
 #[derive(Clone)]
+/// HMAC-SHA256 implementation.
+///
+/// This struct provides both streaming and one-shot APIs for computing HMAC-SHA256.
+///
+/// # Examples
+///
+/// One-shot HMAC computation:
+/// ```
+/// let mac = hmac_sha256::HMAC::mac(b"message data", b"secret key");
+/// ```
+///
+/// Incremental HMAC computation:
+/// ```
+/// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+/// hmac.update(b"first part");
+/// hmac.update(b"second part");
+/// let mac = hmac.finalize();
+/// ```
 pub struct HMAC {
     ih: Hash,
     padded: [u8; 64],
 }
 
 impl HMAC {
-    /// Compute HMAC-SHA256(`input`, `k`)
+    /// Computes the HMAC-SHA256 of the provided input using the given key in a single operation.
+    ///
+    /// This is a convenience method for simple HMAC operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - The message data to authenticate
+    /// * `k` - The secret key
+    ///
+    /// # Returns
+    ///
+    /// A 32-byte HMAC-SHA256 message authentication code
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mac = hmac_sha256::HMAC::mac(b"message data", b"secret key");
+    /// ```
     pub fn mac(input: impl AsRef<[u8]>, k: impl AsRef<[u8]>) -> [u8; 32] {
         let input = input.as_ref();
         let k = k.as_ref();
@@ -350,6 +509,17 @@ impl HMAC {
         oh.finalize()
     }
 
+    /// Creates a new HMAC-SHA256 instance with the given key.
+    ///
+    /// # Arguments
+    ///
+    /// * `k` - The secret key
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+    /// ```
     pub fn new(k: impl AsRef<[u8]>) -> HMAC {
         let k = k.as_ref();
         let mut hk = [0u8; 32];
@@ -368,12 +538,33 @@ impl HMAC {
         HMAC { ih, padded }
     }
 
-    /// Absorb content
+    /// Absorbs content into the HMAC state.
+    ///
+    /// This method can be called multiple times to incrementally add data to be authenticated.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+    /// hmac.update(b"first chunk");
+    /// hmac.update(b"second chunk");
+    /// let mac = hmac.finalize();
+    /// ```
     pub fn update(&mut self, input: impl AsRef<[u8]>) {
         self.ih.update(input);
     }
 
-    /// Compute HMAC-SHA256 over the entire input
+    /// Computes the HMAC-SHA256 of all previously absorbed content.
+    ///
+    /// This method consumes the HMAC instance and returns the computed 32-byte authentication code.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+    /// hmac.update(b"message data");
+    /// let mac: [u8; 32] = hmac.finalize();
+    /// ```
     pub fn finalize(mut self) -> [u8; 32] {
         for p in self.padded.iter_mut() {
             *p ^= 0x6a;
@@ -384,19 +575,132 @@ impl HMAC {
         oh.finalize()
     }
 
+    /// Verifies that the HMAC of absorbed content matches the expected value.
+    ///
+    /// This provides constant-time comparison to prevent timing attacks.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let expected = hmac_sha256::HMAC::mac(b"message data", b"secret key");
+    ///
+    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+    /// hmac.update(b"message data");
+    /// assert!(hmac.verify(&expected));
+    ///
+    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+    /// hmac.update(b"tampered data");
+    /// assert!(!hmac.verify(&expected));
+    /// ```
     pub fn verify(self, expected: &[u8; 32]) -> bool {
+        let out = self.finalize();
+        verify(&out, expected)
+    }
+
+    /// Verifies that the HMAC of absorbed content matches the expected value using a reference.
+    ///
+    /// This method accepts a reference to a slice of bytes and verifies against it using
+    /// constant-time comparison to prevent timing attacks. Unlike `verify`, this method
+    /// does not require the expected value to be exactly 32 bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `expected` - The expected HMAC value to compare against
+    ///
+    /// # Returns
+    ///
+    /// `true` if the computed HMAC matches the expected value, `false` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let expected = hmac_sha256::HMAC::mac(b"message data", b"secret key");
+    ///
+    /// let mut hmac = hmac_sha256::HMAC::new(b"secret key");
+    /// hmac.update(b"message data");
+    /// assert!(hmac.verify_with_ref(&expected));
+    ///
+    /// // Can also verify with a slice
+    /// let expected_slice = &expected[..];
+    /// let mut hmac2 = hmac_sha256::HMAC::new(b"secret key");
+    /// hmac2.update(b"message data");
+    /// assert!(hmac2.verify_with_ref(expected_slice));
+    /// ```
+    pub fn verify_with_ref(self, expected: &[u8]) -> bool {
+        if expected.len() != 32 {
+            return false;
+        }
         let out = self.finalize();
         verify(&out, expected)
     }
 }
 
+/// HMAC-based Key Derivation Function (HKDF) implementation using SHA-256.
+///
+/// HKDF is a key derivation function based on HMAC, standardized in [RFC 5869](https://tools.ietf.org/html/rfc5869).
+/// It is used to derive one or more cryptographically strong keys from input keying material.
+///
+/// The HKDF process consists of two stages:
+/// 1. Extract: Takes input keying material and an optional salt, and produces a pseudorandom key (PRK)
+/// 2. Expand: Takes the PRK, optional context information, and desired output length to generate output keying material
+///
+/// # Examples
+///
+/// Basic usage:
+/// ```
+/// // Extract a pseudorandom key from input keying material using a salt
+/// let prk = hmac_sha256::HKDF::extract(b"salt value", b"input key material");
+///
+/// // Expand the PRK into output keying material of desired length
+/// let mut okm = [0u8; 64]; // 64 bytes of output keying material
+/// hmac_sha256::HKDF::expand(&mut okm, prk, b"application info");
+/// ```
 pub struct HKDF;
 
 impl HKDF {
+    /// Performs the HKDF-Extract function (first stage of HKDF).
+    ///
+    /// Extracts a pseudorandom key from the input keying material using the optional salt.
+    ///
+    /// # Arguments
+    ///
+    /// * `salt` - Optional salt value (a non-secret random value)
+    /// * `ikm` - Input keying material (the secret input)
+    ///
+    /// # Returns
+    ///
+    /// A 32-byte pseudorandom key
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let prk = hmac_sha256::HKDF::extract(b"salt value", b"input key material");
+    /// ```
     pub fn extract(salt: impl AsRef<[u8]>, ikm: impl AsRef<[u8]>) -> [u8; 32] {
         HMAC::mac(ikm, salt)
     }
 
+    /// Performs the HKDF-Expand function (second stage of HKDF).
+    ///
+    /// Expands the pseudorandom key into output keying material of the desired length.
+    ///
+    /// # Arguments
+    ///
+    /// * `out` - Buffer to receive the output keying material
+    /// * `prk` - Pseudorandom key (from the extract step)
+    /// * `info` - Optional context and application specific information
+    ///
+    /// # Panics
+    ///
+    /// Panics if the requested output length is greater than 255 * 32 bytes (8160 bytes).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let prk = hmac_sha256::HKDF::extract(b"salt", b"input key material");
+    /// let mut okm = [0u8; 64]; // 64 bytes of output keying material
+    /// hmac_sha256::HKDF::expand(&mut okm, prk, b"context info");
+    /// ```
     pub fn expand(out: &mut [u8], prk: impl AsRef<[u8]>, info: impl AsRef<[u8]>) {
         let info = info.as_ref();
         let mut counter: u8 = 1;
@@ -642,4 +946,81 @@ fn test2() {
     let mut verifier = HMAC::new(key);
     verifier.update(b"different data");
     assert!(!verifier.verify(&mac));
+}
+
+#[test]
+fn test_verify_with_ref() {
+    // Test Hash verify_with_ref functionality
+    let data = b"test data for hash reference verification";
+    let digest = Hash::hash(data);
+    let digest_slice = &digest[..];
+
+    let mut hasher = Hash::new();
+    hasher.update(data);
+    assert!(hasher.verify_with_ref(digest_slice));
+
+    // Verify with incorrect length fails
+    let mut hasher = Hash::new();
+    hasher.update(data);
+    assert!(!hasher.verify_with_ref(&digest_slice[..16]));
+
+    // Verify with incorrect content fails
+    let mut incorrect_digest = digest;
+    incorrect_digest[0] ^= 1;
+    let mut hasher = Hash::new();
+    hasher.update(data);
+    assert!(!hasher.verify_with_ref(&incorrect_digest));
+
+    // Test HMAC verify_with_ref functionality
+    let key = b"hmac reference verification key";
+    let data = b"test data for hmac reference verification";
+    let mac = HMAC::mac(data, key);
+    let mac_slice = &mac[..];
+
+    let mut hmac = HMAC::new(key);
+    hmac.update(data);
+    assert!(hmac.verify_with_ref(mac_slice));
+
+    // Verify with incorrect length fails
+    let mut hmac = HMAC::new(key);
+    hmac.update(data);
+    assert!(!hmac.verify_with_ref(&mac_slice[..16]));
+
+    // Verify with incorrect content fails
+    let mut incorrect_mac = mac;
+    incorrect_mac[0] ^= 1;
+    let mut hmac = HMAC::new(key);
+    hmac.update(data);
+    assert!(!hmac.verify_with_ref(&incorrect_mac));
+}
+
+#[test]
+fn test_hkdf() {
+    // Test vectors based on RFC 5869 Test Case 1 (adjusted for SHA-256)
+    let ikm =
+        b"\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b\x0b";
+    let salt = b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c";
+    let info = b"\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8\xf9";
+
+    // Incremental API
+    let prk = HKDF::extract(salt, ikm);
+    let mut okm1 = [0u8; 42];
+    HKDF::expand(&mut okm1, prk, info);
+
+    // Test expansion with different output sizes
+    let mut okm2 = [0u8; 32];
+    HKDF::expand(&mut okm2, prk, info);
+    assert_eq!(&okm1[..32], &okm2);
+
+    // Test with empty salt
+    let prk_empty_salt = HKDF::extract(&[] as &[u8], ikm);
+    let mut okm3 = [0u8; 42];
+    HKDF::expand(&mut okm3, prk_empty_salt, info);
+
+    // Test with empty info
+    let mut okm4 = [0u8; 42];
+    HKDF::expand(&mut okm4, prk, &[] as &[u8]);
+
+    // Test that different info produces different output
+    assert_ne!(okm1, okm4);
 }
