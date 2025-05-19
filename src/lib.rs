@@ -15,6 +15,10 @@
 //! // Calculate a SHA-256 hash
 //! let hash = hmac_sha256::Hash::hash(b"hello world");
 //!
+//! // Verify a hash in one shot
+//! let expected = hmac_sha256::Hash::hash(b"hello world");
+//! assert!(hmac_sha256::Hash::verify(b"hello world", &expected));
+//!
 //! // Create an HMAC-SHA256
 //! let mac = hmac_sha256::HMAC::mac(b"message", b"key");
 //!
@@ -403,7 +407,8 @@ impl Hash {
     ///
     /// This method accepts a reference to a slice of bytes and verifies against it using
     /// constant-time comparison to prevent timing attacks. Unlike `finalize_verify`, this method
-    /// does not require the expected value to be exactly 32 bytes.
+    /// does not require the expected value to be exactly 32 bytes, but will return `false` if
+    /// the length is not 32 bytes.
     ///
     /// # Arguments
     ///
