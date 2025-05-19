@@ -26,6 +26,28 @@ fn store_be(base: &mut [u8], offset: usize, x: u32) {
     addr[0] = (x >> 24) as u8;
 }
 
+fn verify(x: &[u8], y: &[u8]) -> bool {
+    if x.len() != y.len() {
+        return false;
+    }
+    let mut v: u32 = 0;
+
+    #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+    {
+        let (mut h1, mut h2) = (0u32, 0u32);
+        for (b1, b2) in x.iter().zip(y.iter()) {
+            h1 ^= (h1 << 5).wrapping_add((h1 >> 2) ^ *b1 as u32);
+            h2 ^= (h2 << 5).wrapping_add((h2 >> 2) ^ *b2 as u32);
+        }
+        v |= h1 ^ h2;
+    }
+    for (a, b) in x.iter().zip(y.iter()) {
+        v |= (a ^ b) as u32;
+    }
+    let v = unsafe { core::ptr::read_volatile(&v) };
+    v == 0
+}
+
 struct W([u32; 16]);
 
 #[derive(Copy, Clone)]
@@ -273,6 +295,12 @@ impl Hash {
         out
     }
 
+    /// Verify that the hash of the absorbed content matches `expected`
+    pub fn verify(self, expected: &[u8; 32]) -> bool {
+        let out = self.finalize();
+        verify(&out, expected)
+    }
+
     /// Compute SHA256(`input`)
     pub fn hash(input: &[u8]) -> [u8; 32] {
         let mut h = Hash::new();
@@ -354,6 +382,11 @@ impl HMAC {
         oh.update(&self.padded[..]);
         oh.update(self.ih.finalize());
         oh.finalize()
+    }
+
+    pub fn verify(self, expected: &[u8; 32]) -> bool {
+        let out = self.finalize();
+        verify(&out, expected)
     }
 }
 
@@ -563,4 +596,50 @@ fn main() {
             135, 24
         ]
     );
+}
+
+#[test]
+fn test2() {
+    let data = b"test data for hash verification";
+    let mut hash = Hash::new();
+    hash.update(data);
+    let digest = hash.finalize();
+
+    let mut verifier = Hash::new();
+    verifier.update(data);
+    assert!(verifier.verify(&digest));
+
+    let mut incorrect_digest = digest;
+    incorrect_digest[0] ^= 1;
+    let mut verifier = Hash::new();
+    verifier.update(data);
+    assert!(!verifier.verify(&incorrect_digest));
+
+    let mut verifier = Hash::new();
+    verifier.update(b"different data");
+    assert!(!verifier.verify(&digest));
+
+    let key = b"hmac verification key";
+    let data = b"test data for hmac verification";
+    let mut hmac = HMAC::new(key);
+    hmac.update(data);
+    let mac = hmac.finalize();
+
+    let mut verifier = HMAC::new(key);
+    verifier.update(data);
+    assert!(verifier.verify(&mac));
+
+    let mut incorrect_mac = mac;
+    incorrect_mac[0] ^= 1;
+    let mut verifier = HMAC::new(key);
+    verifier.update(data);
+    assert!(!verifier.verify(&incorrect_mac));
+
+    let mut verifier = HMAC::new(b"different key");
+    verifier.update(data);
+    assert!(!verifier.verify(&mac));
+
+    let mut verifier = HMAC::new(key);
+    verifier.update(b"different data");
+    assert!(!verifier.verify(&mac));
 }
